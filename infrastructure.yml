@@ -1,0 +1,319 @@
+Parameters:
+  VpcCirdBlock:
+    Type: String
+    Default: 172.31.0.0/16
+    Description: Enter your CidrBlock
+  PrivateSubnet1CirdBlock:
+    Type: String
+    Default: 172.31.1.0/24
+    Description: Enter your Private CidrBlock 1
+  PrivateSubnet2CirdBlock:
+    Type: String
+    Default: 172.31.2.0/24
+    Description: Enter your Private CidrBlock 2
+  PublicSubnet1CirdBlock:
+    Type: String
+    Default: 172.31.3.0/24
+    Description: Enter your Public CidrBlock 1
+  PublicSubnet2CirdBlock:
+    Type: String
+    Default: 172.31.4.0/24
+    Description: Enter your Public CidrBlock 2
+  PrivateSubnet1AZ:
+    Type: String
+    Default: us-east-1a
+  PrivateSubnet2AZ:
+    Type: String
+    Default: us-east-1b
+  PublicSubnet1AZ:
+    Type: String
+    Default: us-east-1a
+  PublicSubnet2AZ:
+    Type: String
+    Default: us-east-1b
+Resources:
+  # instace profile contains the IAM Role name(s) that we want to associate to our auto scaling EC2 Servers
+  # never give too much permissions to your EC2 instances! if they get hacked, the permissions get hacked also!
+  # in this example, I create a Role called UdacityS3ReadOnlyC2 and just give it a policy of S3 Read-Only Access
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock:
+        Ref: VpcCirdBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Ref: PublicSubnet1AZ
+      CidrBlock:
+        Ref: PublicSubnet1CirdBlock
+      MapPublicIpOnLaunch: true
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Ref: PublicSubnet2AZ
+      CidrBlock:
+        Ref: PublicSubnet2CirdBlock
+      MapPublicIpOnLaunch: true
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Ref: PrivateSubnet1AZ
+      CidrBlock:
+        Ref: PrivateSubnet1CirdBlock
+      MapPublicIpOnLaunch: false
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Ref: PrivateSubnet2AZ
+      CidrBlock:
+        Ref: PrivateSubnet2CirdBlock
+      MapPublicIpOnLaunch: false
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+  GatewayToInternet:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: 
+        Ref: VPC
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: 
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: 
+        Ref: InternetGateway
+  PublicSubnet1ARouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: 
+        Ref: PublicSubnet1
+      RouteTableId: 
+        Ref: PublicRouteTable
+  PublicSubnet2ARouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: 
+        Ref: PublicSubnet2
+      RouteTableId: 
+        Ref: PublicRouteTable
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPAddress1.AllocationId
+      SubnetId: 
+        Ref: PublicSubnet1
+  ElasticIPAddress1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: 
+        Ref: VPC
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: 
+        Ref: NATGateway1
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: 
+        Ref: PrivateSubnet1
+      RouteTableId: 
+        Ref: PrivateRouteTable1
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPAddress2.AllocationId
+      SubnetId: 
+        Ref: PublicSubnet2
+  ElasticIPAddress2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: 
+        Ref: VPC
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: 
+        Ref: NATGateway2
+  PrivateSubnet2ARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: 
+        Ref: PrivateSubnet2
+      RouteTableId: 
+        Ref: PrivateRouteTable2
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    
+    Properties:
+      GroupDescription: Open HTTP (port 80)
+      VpcId: 
+        Ref: VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    DependsOn: ProfileWithRolesForOurApp
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: /dev/sdk
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: '10'
+            DeleteOnTermination: 'true'
+            Encrypted: 'false'
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: false
+            Groups:
+              - 
+                Ref: InstanceSecurityGroup
+            DeleteOnTermination: true
+        ImageId: ami-061dbd1209944525c
+        InstanceType: t3.medium
+        IamInstanceProfile: 
+          Arn: !GetAtt
+            - ProfileWithRolesForOurApp
+            - Arn
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              sudo apt update -y
+              sudo apt install apache2 -y
+              sudo systemctl start apache2.service
+              sudo systemctl enable apache2
+              cd /var/www/html
+              echo "This is my unique dummy Web app" > index.html
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '4'
+      MaxSize: '5'
+      DesiredCapacity: '4'
+      LaunchTemplate:
+        LaunchTemplateId: 
+          Ref: LaunchTemplate
+        Version: "1"
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - Ref: MyTargetGroup
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ELBSecurityGroup
+
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: 
+        Ref: VPC
+
+  ProfileWithRolesForOurApp:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles:
+        - UdacityS3ReadOnlyEC2
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: MyTargetGroup
+      LoadBalancerArn:
+        Ref: LoadBalancer
+      Port: '80'
+      Protocol: HTTP
+  ALBListenerRule:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn: !Ref 'MyTargetGroup'
+        Conditions:
+        - Field: path-pattern
+          Values: [/]
+        ListenerArn: !Ref 'Listener'
+        Priority: 1
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 4
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: 
+        Ref: VPC
+Outputs:
+  LoadbalancerDns:
+    Value: !Sub 
+      - 'http://${Domain}'
+      - Domain: !GetAtt LoadBalancer.DNSName
